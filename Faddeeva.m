@@ -7,6 +7,7 @@ Faddeeva::usage =
 	"Faddeeva[z] returns the value of the Faddeeva function for complex z.";
 ErfcxRe::usage = "ErfcxRe[x] returns the scaled complementary error function Exp[x^2]Erfc[x] for real x.";
 ErfcxIm::usage = "ErfcxIm[x] returns the scaled imaginary error function Exp[-x^2]Erfi[x] for real x.";
+Voigt::usage = "";
 
 
 Unprotect[Evaluate[$Context<>"*"]];
@@ -241,10 +242,6 @@ Block[{res = 0., xAbs = Abs[x]},
 		RuntimeAttributes->{Listable}, RuntimeOptions->"Speed", Parallelization->True, CompilationTarget->"C"]];
 
 
-uExp = Compile[{{z, _Complex}}, If[Re[z] > -705., Exp[z], 0.],
-	CompilationTarget->"C", RuntimeAttributes->{Listable}, RuntimeOptions->"Speed", Parallelization->True]
-
-
 Faddeeva =
 	Block[{lookupEmA2N2 = Table[Reverse@#~Join~#&[Table[Exp[-n^2/16.] + 0. I,{n,106}]],{3}] // Developer`ToPackedArray,
 		lookupAN = Delete[Table[n/4., {n,-106, 106}],{107}], lookupA2N2},
@@ -260,17 +257,28 @@ Faddeeva =
 			Block[{sums = lookup, e2ANx = Exp[2 lAN x]},
 				sums[[2]] *= e2ANx; sums[[3]] *= e2ANx;
 				Return[Exp[mxx] *
-					(ere Exp[2I mxy] + 0.07957747154594767` * 
+					(ere Exp[2 I mxy] + 0.07957747154594767` * 
 						(2 I x Sinc[mxy] Exp[I mxy] +
-							Total[Divide[{Minus[y Exp[2 I mxy]], y, 1.}.sums, lA2N2 + y*y]]))
+							{Minus[y Exp[2 I mxy]], y, 1.}.sums.Divide[1,(lA2N2 + y*y)]))
 				]
 			]
 		];
 		With[{zz=z*z},0.5641895835477563` I Divide[z (-558+zz (740+zz (-216+16 zz))),105+zz (-840+zz (840+zz (-224+16 zz)))]]]],
-		RuntimeAttributes->{Listable}, RuntimeOptions->"Speed", Parallelization->True, CompilationOptions->{"InlineExternalDefinitions" -> True}
+		RuntimeAttributes->{Listable}, RuntimeOptions->{"EvaluateSymbolically"->False}, Parallelization->True,
+		CompilationOptions->{"InlineExternalDefinitions" -> True, "InlineCompiledFunctions"->False},CompilationTarget->"C"
 	]
 	]
 	]
+
+
+Voigt = With[{s=Subtract,d=Divide},
+	Compile[{dE,x0, sg, gg, x},
+		If[sg==0., Return[d[dE x0*x0, x0*x0 - I gg x - x*x]]];
+		With[{xs=0.7071067811865476`d[x,sg], x2s = 0.7071067811865476`d[x0+I gg, sg]},With[{x1s = Minus[Conjugate[x2s]]},
+		dE d[s[Faddeeva[xs+x1s], Faddeeva[xs+x2s] ],2 I Im[Faddeeva[x1s] ]]
+		]],
+		RuntimeAttributes->{Listable}, Parallelization->True, CompilationOptions->{"InlineExternalDefinitions" -> True, "InlineCompiledFunctions"->False},
+		CompilationTarget->"C"]]
 
 
 End[];
